@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verification</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <script>
+        // REPLACE WITH YOUR SUPABASE CREDENTIALS
+        const SUPABASE_URL = "YOUR_SUPABASE_URL_HERE";
+        const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY_HERE";
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // Get the token passed from Unity via URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const accessToken = urlParams.get('token');
+
+        if (!accessToken) {
+            document.body.innerText = JSON.stringify({ status: "FAIL", reason: "No token" });
+        } else {
+            // 1. Get Meta User ID from the token
+            fetch(`https://graph.facebook.com/v19.0/me?fields=id&access_token=${accessToken}`)
+                .then(res => res.json())
+                .then(metaData => {
+                    if (metaData.error) {
+                        document.body.innerText = JSON.stringify({ status: "FAIL", reason: "Invalid Meta Token" });
+                        return;
+                    }
+
+                    const userId = metaData.id;
+
+                    // 2. Check/Update in Supabase
+                    // We use upsert to ensure the user exists and is marked verified
+                    return supabase
+                        .from('verified_users')
+                        .upsert({ 
+                            meta_user_id: userId, 
+                            is_verified: true,
+                            linked_at: new Date().toISOString()
+                        })
+                        .select();
+                })
+                .then(({ data, error }) => {
+                    if (error) {
+                        document.body.innerText = JSON.stringify({ status: "FAIL", reason: error.message });
+                    } else {
+                        // Success! Return a simple JSON to Unity
+                        document.body.innerText = JSON.stringify({ 
+                            status: "SUCCESS", 
+                            verified: true, 
+                            userId: data.meta_user_id 
+                        });
+                    }
+                });
+        }
+    </script>
+</body>
+</html>
